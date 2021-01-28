@@ -31,6 +31,11 @@ namespace GeneralStoreAPI.Controllers
             if (productEntity is null)
                 return BadRequest($"The target product with SKU: {transactionModel.SKU} does not exist.");
 
+            // Find the Customer by the transaction.CustomerId and see that it exists
+            var customerEntity = await _context.Customers.FindAsync(transactionModel.CustomerId);
+            if (customerEntity is null)
+                return BadRequest($"The target customer with ID: {transactionModel.CustomerId} does not exist.");
+
             // Verify that the product is in stock
             if (productEntity.IsInStock is false)
                 return BadRequest($"{productEntity.Name} is out of stock.");
@@ -39,7 +44,7 @@ namespace GeneralStoreAPI.Controllers
             if (productEntity.NumberInInventory < transactionModel.ItemCount)
                 return BadRequest($"Unable to process transaction. The current stock is {productEntity.NumberInInventory}.");
 
-            //Remove the products that were bought - This works, but throws the "InternalServerError()"
+            // Remove the products that were bought
             int newQuantity = productEntity.NumberInInventory - transactionModel.ItemCount;
             productEntity.NumberInInventory = newQuantity;
 
@@ -110,27 +115,29 @@ namespace GeneralStoreAPI.Controllers
             if (transaction is null)
                 return NotFound();
 
-            int originalItemCount = transaction.ItemCount;
+            var productEntity = await _context.Products.FindAsync(updatedTransaction.SKU);
 
+            int currentQuantity = transaction.ItemCount;
+
+            transaction.CustomerId = updatedTransaction.CustomerId;
             transaction.ItemCount = updatedTransaction.ItemCount;
             transaction.DateOfTransaction = updatedTransaction.DateOfTransaction;
 
-            var productEntity = await _context.Products.FindAsync(updatedTransaction.SKU);
-
-            int newQuantity = (productEntity.NumberInInventory - updatedTransaction.ItemCount) + originalItemCount;
+            int newQuantity = (currentQuantity + productEntity.NumberInInventory) - updatedTransaction.ItemCount;
             productEntity.NumberInInventory = newQuantity;
 
-            if (productEntity.IsInStock is false)
-                return BadRequest($"{productEntity.Name} is out of stock.");
+            if (newQuantity <= 0)
+                return BadRequest($"Unable to process transaction. The stock would be {productEntity.NumberInInventory}.");
 
-            if (productEntity.NumberInInventory < updatedTransaction.ItemCount)
-                return BadRequest($"Unable to process transaction. The current stock is {productEntity.NumberInInventory}.");
+            //if (productEntity.IsInStock is false)
+            //    return BadRequest($"{productEntity.Name} is out of stock.");
 
             if (await _context.SaveChangesAsync() != 0)
                 return Ok($"You successfully updated the transaction.");
 
             return InternalServerError();
         }
+
         // DELETE
         public async Task<IHttpActionResult> DeleteTransaction([FromUri] int id)
         {

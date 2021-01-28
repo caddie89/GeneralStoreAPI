@@ -25,7 +25,5 @@ namespace GeneralStoreAPI.Models
                 return fullName;
             }
         }
-
-        //public virtual List<Transaction> Transactions { get; set; } = new List<Transaction>();
     }
 }
